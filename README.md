@@ -5,4 +5,7 @@ This one has no key or something else to make game more harder to play.
 
 Fast & usefully. Copy and paste this below to use.
 
-loadstring(game:HttpGet('https://raw.githubusercontent.com/Zac-alt-3k3/Climb-and-Jump-Tower/refs/heads/main/main'))()
+## Script
+```lua
+loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Zac-alt-3k3/Climb-and-Jump-Tower/refs/heads/main/main"))()
+```
