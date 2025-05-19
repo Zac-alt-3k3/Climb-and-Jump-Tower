@@ -1,0 +1,219 @@
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Kiểm tra script đã chạy chưa
+if _G.CombatSystemRunning then
+    warn("Hệ thống đã được kích hoạt trước đó")
+    return
+end
+_G.CombatSystemRunning = true
+
+-- Biến hệ thống
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
+
+-- Cài đặt mặc định
+local currentWalkSpeed = 100
+local currentMode = 2
+local fixnon = 0
+local lastHeightCheck = 0
+
+-- Tạo UI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SpeedControlUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game:GetService("CoreGui")
+
+
+local nextCheckInterval = math.random(3, 4) -- Khởi tạo ngẫu nhiên lần đầu
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 250, 0, 275)  -- Giảm chiều rộng
+Frame.Position = UDim2.new(0, 10, 0.5, -100)  -- Sát trái (X = 10), giữa chiều cao
+Frame.AnchorPoint = Vector2.new(0, 0.5)  -- Neo trái và giữa dọc
+Frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Frame.BackgroundTransparency = 0.3  -- Trong suốt nhẹ
+Frame.Parent = ScreenGui
+
+-- Label WalkSpeed
+local WalkSpeedLabel = Instance.new("TextLabel")
+WalkSpeedLabel.Text = "WalkSpeed:"
+WalkSpeedLabel.Size = UDim2.new(0.8, 0, 0, 30)
+WalkSpeedLabel.Position = UDim2.new(0.1, 0, 0.1, 0)
+WalkSpeedLabel.TextColor3 = Color3.new(1, 1, 1)
+WalkSpeedLabel.Parent = Frame
+
+-- TextBox WalkSpeed
+local WalkSpeedBox = Instance.new("TextBox")
+WalkSpeedBox.Text = "500"
+WalkSpeedBox.Size = UDim2.new(0.8, 0, 0, 30)
+WalkSpeedBox.Position = UDim2.new(0.1, 0, 0.2, 0)
+WalkSpeedBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+WalkSpeedBox.TextColor3 = Color3.new(1, 1, 1)
+WalkSpeedBox.Parent = Frame
+
+-- Label Số lần lặp
+local HatchEgg = Instance.new("TextLabel")
+HatchEgg.Text = "Hatch egg"
+HatchEgg.Size = UDim2.new(0.8, 0, 0, 30)
+HatchEgg.Position = UDim2.new(0.1, 0, 0.4, 0)
+HatchEgg.TextColor3 = Color3.new(1, 1, 1)
+HatchEgg.Parent = Frame
+
+-- TextBox Số lần lặp
+local EggBox = Instance.new("TextBox")
+EggBox.Text = "0"
+EggBox.Size = UDim2.new(0.8, 0, 0, 30)
+EggBox.Position = UDim2.new(0.1, 0, 0.5, 0)
+EggBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+EggBox.TextColor3 = Color3.new(1, 1, 1)
+EggBox.Parent = Frame
+
+-- Nút Áp dụng
+local ApplyButton = Instance.new("TextButton")
+ApplyButton.Text = "Speed & Hatch"
+ApplyButton.Size = UDim2.new(0.8, 0, 0, 30)
+ApplyButton.Position = UDim2.new(0.1, 0, 0.7, 0)
+ApplyButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+ApplyButton.TextColor3 = Color3.new(1, 1, 1)
+ApplyButton.Parent = Frame
+
+-- Thêm nút Reset Nhân Vật
+local ResetButton = Instance.new("TextButton")
+ResetButton.Text = "Auto farm"
+ResetButton.Size = UDim2.new(0.8, 0, 0, 30)
+ResetButton.Position = UDim2.new(0.1, 0, 0.8, 0) -- Đặt dưới nút Áp dụng 12%
+ResetButton.BackgroundColor3 = Color3.fromRGB(215, 60, 0) -- Màu đỏ cam
+ResetButton.TextColor3 = Color3.new(1, 1, 1)
+ResetButton.Font = Enum.Font.SourceSansBold
+ResetButton.Parent = Frame
+
+local currentMode = 2
+local HatchEgg = 0
+
+-- Hàm cập nhật giao diện
+local function updateModeDisplay()
+    if currentMode == 1 then
+        ResetButton.Text = "Chế độ: Dừng"
+        ResetButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+    elseif currentMode == 2 then
+        ResetButton.Text = "Chế độ: Bình thường"
+        ResetButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+    end
+end
+
+-- Hàm kill nhân vật
+local function killCharacter()
+    local character = player.Character
+    if not character then return end
+    
+    local explosion = Instance.new("Explosion")
+    explosion.Position = character:GetPivot().Position
+    explosion.BlastRadius = 10
+    explosion.BlastPressure = 0
+    explosion.Parent = workspace
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+    end
+    
+    local args = {"isAutoOn", 1}
+    ReplicatedStorage:WaitForChild("ServerMsg"):WaitForChild("Setting"):InvokeServer(unpack(args))
+    wait(3)
+end
+
+-- Kết nối sự kiện nút Áp dụng
+ApplyButton.MouseButton1Click:Connect(function()
+    currentWalkSpeed = tonumber(WalkSpeedBox.Text) or currentWalkSpeed
+    HatchEgg = tonumber(EggBox.Text) or HatchEgg
+    warn("Đã cập nhật: Tốc độ = "..currentWalkSpeed.." Trứng thứ : "..HatchEgg)
+    
+    -- Áp dụng ngay lập tức nếu đang ở chế độ hoạt động
+    if currentMode == 2 and character and humanoid then
+        humanoid.WalkSpeed = currentWalkSpeed
+    end
+
+local args = {HatchEgg + 7000000,1}
+game:GetService("ReplicatedStorage"):WaitForChild("Tool"):WaitForChild("DrawUp"):WaitForChild("Msg"):WaitForChild("DrawHero"):InvokeServer(unpack(args))
+
+end)
+
+-- Kết nối sự kiện nút Reset/Chế độ
+ResetButton.MouseButton1Click:Connect(function()
+    currentMode = (currentMode % 2) + 1 -- Luân phiên 1-2
+    updateModeDisplay()
+                local args = {"isAutoOn", 0}
+            ReplicatedStorage:WaitForChild("ServerMsg"):WaitForChild("Setting"):InvokeServer(unpack(args))    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "ĐÃ ĐỔI CHẾ ĐỘ "..currentMode,
+        Text = ResetButton.Text,
+        Duration = 3
+    })
+    
+    -- Nếu chuyển sang chế độ hoạt động, áp dụng speed ngay
+    if currentMode == 2 and character and humanoid then
+        humanoid.WalkSpeed = currentWalkSpeed
+    elseif currentMode == 2 and character and humanoid then
+
+    end
+end)
+
+-- Hệ thống chính
+local function mainLoop()
+    while true do
+        task.wait(0.1)
+        
+        -- Kiểm tra và cập nhật character
+        if not character or not character.Parent then
+            character = player.Character or player.CharacterAdded:Wait()
+            humanoid = character:WaitForChild("Humanoid")
+            humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+        end
+        
+        -- Chỉ xử lý khi ở chế độ hoạt động
+        while currentMode == 2 do
+            -- Áp dụng tốc độ di chuyển
+	    local character = player.Character or player.CharacterAdded:Wait()
+   	    local humanoid = character:WaitForChild("Humanoid")
+   	    humanoid.WalkSpeed = currentWalkSpeed
+            -- Kiểm tra độ cao mỗi 3 giây
+            if time() - lastHeightCheck >= nextCheckInterval then
+                local height = humanoidRootPart.Position.Y
+                
+                if fixnon == height then
+                    warn("Lỗi: Nhân vật ở nguyên độ cao")
+                    killCharacter()
+                end
+		if height >= 14000 then
+                    warn("too high, u need jump")
+		    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+
+                nextCheckInterval = math.random(3, 9)
+		fixnon = height
+                lastHeightCheck = time()
+            end
+            
+            -- Gửi yêu cầu server
+            local args = {"isAutoOn", 1}
+            ReplicatedStorage:WaitForChild("ServerMsg"):WaitForChild("Setting"):InvokeServer(unpack(args))
+        end
+    end
+end
+
+-- Thông báo khởi động
+game.StarterGui:SetCore("SendNotification", {
+    Title = "HỆ THỐNG KHỞI ĐỘNG",
+    Text = "⚔️ ═════════════🔍",
+    Duration = 5
+})
+
+-- Khởi động hệ thống
+killCharacter() -- Reset ban đầu
+updateModeDisplay() -- Cập nhật giao diện lần đầu
+task.spawn(mainLoop) -- Chạy vòng lặp chính
+
